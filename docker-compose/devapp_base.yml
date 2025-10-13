@@ -1,0 +1,61 @@
+# Defines the multi-container application services, networks, and volumes.
+services:
+  # The Flask Application Service
+  web:
+    build:
+      context: ./build
+      dockerfile: PYTHON_DOCKERFILE
+      args:
+        - HTTP_PROXY=${HTTP_PROXY}
+        - HTTPS_PROXY=${HTTPS_PROXY}
+        - NO_PROXY=${NO_PROXY}
+    container_name: ${COMPOSE_PROJECT_NAME}-web
+    restart: always
+    env_file:
+      - ../.env
+    environment:
+      - POSTGRES_HOST=db
+    volumes:
+      - ../app/main.py:/app/main.py
+    command: gunicorn --bind 0.0.0.0:5000 --reload main:app
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+      - traefikproxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}.rule=Host(`devapp.bpkornyekitvsz.birosagiad.hu`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}.entrypoints=websecure"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}.tls=true"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}.loadbalancer.server.port=5000"
+
+  db:
+    image: postgres:16-alpine
+    container_name: ${COMPOSE_PROJECT_NAME}-db
+    restart: always
+    env_file:
+      - ../.env
+    environment:
+      - POSTGRES_DB=${POSTGRES_DATABASE}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  app-network:
+    driver: bridge
+  traefikproxy:
+    name: traefikproxy
+    external: true
+
+volumes:
+  pg-data:
