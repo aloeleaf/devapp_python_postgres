@@ -16,8 +16,8 @@ class UserSchema(Schema):
 
 class PaginationSchema(Schema):
     """Schema for pagination parameters."""
-    page = fields.Int(missing=1, validate=validate.Range(min=1))
-    per_page = fields.Int(missing=20, validate=validate.Range(min=1, max=100))
+    page = fields.Int(load_default=1, validate=validate.Range(min=1))
+    per_page = fields.Int(load_default=20, validate=validate.Range(min=1, max=100))
 
 
 # Initialize schema instances for reuse

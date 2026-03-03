@@ -42,7 +42,7 @@ class UserService:
     @staticmethod
     def get_user_by_id(user_id):
         """Get user by ID."""
-        return User.query.get(user_id)
+        return db.session.get(User, user_id)
     
     @staticmethod
     def get_user_by_username(username):
@@ -67,7 +67,7 @@ class UserService:
     @staticmethod
     def update_user(user_id, **kwargs):
         """Update user fields."""
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user:
             return None
         
@@ -87,7 +87,7 @@ class UserService:
     @staticmethod
     def delete_user(user_id):
         """Delete user by ID."""
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user:
             return False
         
