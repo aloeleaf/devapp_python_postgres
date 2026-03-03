@@ -1,10 +1,10 @@
-# Defines the multi-container application services, networks, and volumes.
 services:
-  # The Flask Application Service
   web:
     build:
-      context: ./build
-      dockerfile: PYTHON_DOCKERFILE
+      # Context is the project root (one level up from this file)
+      context: ../
+      # Path to Dockerfile relative to the build context (root)
+      dockerfile: docker-compose/build/PYTHON_DOCKERFILE
       args:
         - HTTP_PROXY=${HTTP_PROXY}
         - HTTPS_PROXY=${HTTPS_PROXY}
@@ -14,21 +14,27 @@ services:
     env_file:
       - ../.env
     environment:
+      # Explicitly set the DB host, though .env usually handles this
       - POSTGRES_HOST=db
     volumes:
-      - ../app/main.py:/app/main.py
-    command: gunicorn --bind 0.0.0.0:5000 --reload main:app
+      # Mount the project root to /app so 'run.py' and 'app/' are visible
+      - ../:/app
+    # Updated command to point to the new entry point 'run.py'
+    command: gunicorn --bind 0.0.0.0:5000 --reload run:app
     depends_on:
       db:
         condition: service_healthy
     networks:
       - app-network
       - traefikproxy
+    # --- TRAEFIK CONFIGURATION RESTORED ---
     labels:
       - "traefik.enable=true"
+      # Uses the COMPOSE_PROJECT_NAME from .env to name the router
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}.rule=Host(`devapp.bpkornyekitvsz.birosagiad.hu`)"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}.entrypoints=websecure"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}.tls=true"
+      # Points Traefik to the internal port 5000 where Gunicorn is listening
       - "traefik.http.services.${COMPOSE_PROJECT_NAME}.loadbalancer.server.port=5000"
 
   db:

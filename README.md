@@ -1,368 +1,459 @@
-# dev_app_flask_postgresdb - Architecture Documentation
+# Flask PostgreSQL Application
 
-## Overview
+Production-ready Flask application with PostgreSQL database, designed for corporate environments.
 
-This is a containerized Flask web application with PostgreSQL database, orchestrated using Docker Compose and exposed via Traefik reverse proxy.
+## 🏗️ Architecture
 
-## Architecture Diagram
+This application follows best practices for Flask applications in enterprise environments:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Traefik Reverse Proxy                   │
-│          (devapp.bpkornyekitvsz.birosagiad.hu)             │
-└──────────────────────┬──────────────────────────────────────┘
-                       │ HTTPS (443)
-                       │
-┌──────────────────────▼──────────────────────────────────────┐
-│                   Docker Network: traefikproxy              │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────────┐
-│                   Docker Network: app-network               │
-│                                                             │
-│  ┌────────────────────────┐      ┌────────────────────────┐│
-│  │   Flask Web Service    │      │  PostgreSQL Database   ││
-│  │  (devapp-web)          │◄────►│  (devapp-db)          ││
-│  │                        │      │                        ││
-│  │  - Python 3.9          │      │  - PostgreSQL 16       ││
-│  │  - Flask 3.0.0         │      │  - Alpine Linux        ││
-│  │  - Gunicorn 21.2.0     │      │  - Port: 5432          ││
-│  │  - Port: 5000          │      │  - Volume: pg-data     ││
-│  │  - Auto-reload enabled │      │  - Health checks       ││
-│  └────────────────────────┘      └────────────────────────┘│
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+- **Application Factory Pattern**: Modular and testable application structure
+- **Blueprint-based Routing**: Organized route handlers with versioned APIs
+- **Service Layer**: Business logic separated from route handlers
+- **Structured Logging**: JSON-formatted logs for centralized logging systems
+- **Request Tracing**: Unique request IDs for tracking across services
+- **Health Checks**: Kubernetes/Docker-ready liveness and readiness probes
+- **Security Headers**: CORS, CSP, HSTS, and other security protections
+- **Input Validation**: Marshmallow schemas for request validation
+- **Database Migrations**: Flask-Migrate for schema version control
+- **Containerized**: Docker and Docker Compose for consistent deployments
+- **Reverse Proxy**: Traefik integration with SSL/TLS
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 dev_app_flask_postgresdb/
-│
 ├── app/
-│   └── main.py                      # Flask application entry point
-│
+│   ├── __init__.py              # Application factory
+│   ├── extensions.py            # Flask extensions (db, migrate)
+│   ├── errors.py                # Error handlers
+│   ├── models/                  # SQLAlchemy models
+│   │   └── __init__.py
+│   ├── routes/                  # Blueprint route handlers
+│   │   ├── __init__.py
+│   │   ├── main.py             # Main routes
+│   │   ├── health.py           # Health check endpoints
+│   │   └── api/                # Versioned API routes
+│   │       └── __init__.py     # API v1 routes
+│   ├── schemas/                 # Marshmallow validation schemas
+│   │   └── __init__.py
+│   ├── services/                # Business logic layer
+│   │   └── __init__.py
+│   ├── middleware/              # Request/response middleware
+│   │   ├── __init__.py
+│   │   ├── logging_middleware.py
+│   │   ├── request_id.py
+│   │   └── security.py
+│   ├── utils/                   # Helper functions
+│   │   └── __init__.py
+│   ├── static/                  # Static files (CSS, JS, images)
+│   └── templates/               # Jinja2 templates
 ├── docker-compose/
-│   ├── build/
-│   │   ├── PYTHON_DOCKERFILE        # Dockerfile for Flask container
-│   │   └── requirements.txt         # Python dependencies
-│   │
-│   └── devapp_base.yml              # Docker Compose configuration
-│
-├── .env                             # Environment variables (not in git)
-├── README.md                        # User guide
-├── ARCHITECTURE.md                  # This file
-└── .gitignore                       # Git ignore rules
-
-Docker Volumes:
-└── pg-data/                         # PostgreSQL persistent data storage
+│   ├── devapp_base.yml         # Docker Compose configuration
+│   └── build/
+│       └── PYTHON_DOCKERFILE    # Application Dockerfile
+├── tests/                       # Test suite
+│   ├── conftest.py             # Pytest configuration
+│   ├── unit/                   # Unit tests
+│   └── integration/            # Integration tests
+├── migrations/                  # Database migrations (generated)
+├── logs/                        # Application logs
+├── config.py                    # Configuration management
+├── requirements.txt             # Python dependencies
+├── run.py                       # Application entry point
+├── .env                         # Environment variables (not in git)
+├── .gitignore                   # Git ignore rules
+└── .dockerignore               # Docker ignore rules
 ```
 
-## Technology Stack
+## 🚀 Quick Start
 
-### Web Application Layer
-- **Python**: 3.9-slim
-- **Framework**: Flask 3.0.0
-- **WSGI Server**: Gunicorn 21.2.0
-- **Database Driver**: psycopg2-binary 2.9.9
+### Prerequisites
 
-### Database Layer
-- **Database**: PostgreSQL 16 (Alpine)
-- **Data Persistence**: Docker named volume (`pg-data`)
-- **Health Monitoring**: pg_isready checks
+- Docker and Docker Compose
+- Git
+- Network access (for corporate proxy settings)
 
-### Infrastructure Layer
-- **Containerization**: Docker
-- **Orchestration**: Docker Compose
-- **Reverse Proxy**: Traefik (external)
-- **Networking**: Bridge network (app-network) + Traefik network
+### Installation
 
-## Component Details
+1. **Clone the repository** (or navigate to the project directory):
+   ```bash
+   cd /srv/containers/dev_app_flask_postgresdb
+   ```
 
-### 1. Flask Web Service (`web`)
+2. **Configure environment variables**:
+   Edit `.env` file with your settings:
+   ```bash
+   # Project name
+   COMPOSE_PROJECT_NAME=devapp_python_prostgres
 
-**Container Name**: `devapp-web`
+   # Flask configuration
+   FLASK_ENV=development
+   FLASK_DEBUG=1
 
-**Build Process**:
-- Base image: `python:3.9-slim`
-- Installs system dependencies: gcc, libpq-dev, postgresql-client
-- Installs Python packages from `requirements.txt`
-- Supports HTTP/HTTPS proxy configuration
+   # Database configuration
+   POSTGRES_DATABASE=devappdb
+   POSTGRES_USER=dbappuser
+   POSTGRES_PASSWORD=your_secure_password
+   POSTGRES_HOST=db
+   POSTGRES_PORT=5432
 
-**Runtime Configuration**:
-- Runs Gunicorn with auto-reload for development
-- Binds to `0.0.0.0:5000`
-- Hot-reload enabled via volume mount of `main.py`
-- Waits for database health check before starting
+   # Proxy settings (if applicable)
+   HTTP_PROXY=http://proxy.example.com:3128
+   HTTPS_PROXY=http://proxy.example.com:3128
+   NO_PROXY=localhost,127.0.0.1,10.0.0.0/8
+   ```
 
-**Environment Variables**:
-```
-POSTGRES_HOST=db
-POSTGRES_DATABASE=devappdb
-POSTGRES_USER=dbappuser
-POSTGRES_PASSWORD=p1ssw2rd
-POSTGRES_PORT=5432
-FLASK_APP=app/main.py
-FLASK_ENV=development
-FLASK_DEBUG=1
-```
+3. **Start the application**:
+   ```bash
+   docker compose up -d
+   ```
 
-**Exposed Endpoints**:
-- `/` - Hello World page
-- `/db_test` - Database connection test (JSON response)
+4. **Check application status**:
+   ```bash
+   docker compose ps
+   docker compose logs -f web
+   ```
 
-### 2. PostgreSQL Database Service (`db`)
+### Access the Application
 
-**Container Name**: `devapp-db`
+- **Main Application**: http://devapp.bpkornyekitvsz.birosagiad.hu (via Traefik)
+- **Local Access**: http://localhost:5000 (if exposed)
+- **Health Check**: http://localhost:5000/health/live
+- **API**: http://localhost:5000/api/v1/users
 
-**Image**: `postgres:16-alpine`
+## 🔧 Development
 
-**Data Persistence**:
-- Volume: `pg-data` mounted at `/var/lib/postgresql/data`
-- Survives container restarts and removals
+### Database Migrations
 
-**Health Check**:
-- Command: `pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DATABASE}`
-- Interval: 10 seconds
-- Timeout: 5 seconds
-- Retries: 5
-- Start period: 10 seconds
-
-**Environment Variables**:
-```
-POSTGRES_DB=devappdb
-POSTGRES_USER=dbappuser
-POSTGRES_PASSWORD=p1ssw2rd
-```
-
-## Network Architecture
-
-### Internal Network: `app-network`
-- **Type**: Bridge network
-- **Purpose**: Communication between Flask and PostgreSQL
-- **Isolation**: Services are not directly accessible from host
-
-### External Network: `traefikproxy`
-- **Type**: External network
-- **Purpose**: Integration with Traefik reverse proxy
-- **Access**: Provides HTTPS access to the application
-
-## Request Flow
-
-```
-1. User Request
-   └─► https://devapp.bpkornyekitvsz.birosagiad.hu
-
-2. Traefik Reverse Proxy
-   ├─► SSL/TLS termination
-   ├─► Route matching
-   └─► Forward to devapp-web:5000
-
-3. Gunicorn (WSGI Server)
-   ├─► Receives HTTP request
-   ├─► Passes to Flask app
-   └─► Returns response
-
-4. Flask Application
-   ├─► Routes request to handler
-   ├─► Connects to PostgreSQL (if needed)
-   │   └─► psycopg2 → devapp-db:5432
-   └─► Returns JSON/HTML response
-
-5. Response Flow
-   └─► Flask → Gunicorn → Traefik → User
-```
-
-## Database Connection Flow
-
-```python
-# Connection with retry logic
-1. Flask app attempts connection
-2. If failed, retry up to 5 times
-3. Wait 5 seconds between retries
-4. Connection parameters from environment:
-   - host: db (Docker DNS)
-   - database: devappdb
-   - user: dbappuser
-   - password: p1ssw2rd
-   - port: 5432
-```
-
-## Security Considerations
-
-### Current Implementation
-- ✅ Database credentials in `.env` file (not in git)
-- ✅ HTTPS via Traefik
-- ✅ Isolated Docker networks
-- ✅ Non-root user in containers (Python image default)
-- ✅ Minimal base images (Alpine for PostgreSQL)
-
-### Recommendations for Production
-- 🔒 Use Docker secrets instead of `.env` for sensitive data
-- 🔒 Implement database connection pooling
-- 🔒 Add rate limiting
-- 🔒 Enable Flask security headers
-- 🔒 Regular security updates for base images
-- 🔒 Implement application-level authentication
-- 🔒 Add SQL injection protection (use parameterized queries)
-- 🔒 Enable PostgreSQL SSL connections
-
-## Deployment Process
-
-### Development Deployment
+Initialize migrations (first time only):
 ```bash
-# 1. Build and start services
-docker-compose -f docker-compose/devapp_base.yml up --build -d
-
-# 2. View logs
-docker-compose -f docker-compose/devapp_base.yml logs -f
-
-# 3. Stop services
-docker-compose -f docker-compose/devapp_base.yml down
+docker compose exec web flask db init
 ```
 
-### Production Deployment
+Create a new migration after model changes:
 ```bash
-# 1. Build without cache
-docker-compose -f docker-compose/devapp_base.yml build --no-cache
-
-# 2. Start in detached mode
-docker-compose -f docker-compose/devapp_base.yml up -d
-
-# 3. Verify health
-docker-compose -f docker-compose/devapp_base.yml ps
+docker compose exec web flask db migrate -m "Description of changes"
 ```
 
-## Monitoring and Debugging
-
-### Container Status
+Apply migrations:
 ```bash
-docker-compose -f docker-compose/devapp_base.yml ps
+docker compose exec web flask db upgrade
 ```
 
-### Application Logs
+Rollback last migration:
 ```bash
-# Web service logs
-docker logs devapp-web -f
-
-# Database logs
-docker logs devapp-db -f
-
-# All services
-docker-compose -f docker-compose/devapp_base.yml logs -f
+docker compose exec web flask db downgrade
 ```
 
-### Database Access
+### Running Tests
+
+Run all tests:
 ```bash
-# Connect to PostgreSQL
-docker exec -it devapp-db psql -U dbappuser -d devappdb
-
-# View tables
-\dt
-
-# Exit
-\q
+docker compose exec web pytest
 ```
 
-### Health Checks
-- Database: Automatic via `pg_isready`
-- Web App: Access `/db_test` endpoint for connection status
-
-## Scalability Considerations
-
-### Current Limitations
-- Single web container
-- Single database instance
-- No load balancing (handled by Traefik)
-- No database replication
-
-### Scaling Options
-1. **Horizontal Scaling (Web)**:
-   - Add more web containers
-   - Traefik handles load balancing automatically
-
-2. **Database Scaling**:
-   - Implement read replicas
-   - Use connection pooling (pgBouncer)
-   - Consider managed PostgreSQL services
-
-3. **Caching**:
-   - Add Redis for session storage
-   - Implement application-level caching
-
-## Backup and Recovery
-
-### Database Backup
+Run with coverage:
 ```bash
-# Backup
-docker exec devapp-db pg_dump -U dbappuser devappdb > backup.sql
-
-# Restore
-docker exec -i devapp-db psql -U dbappuser devappdb < backup.sql
+docker compose exec web pytest --cov=app --cov-report=html
 ```
 
-### Volume Backup
+Run specific test file:
 ```bash
-# Backup volume data
-docker run --rm \
-  -v pg-data:/data \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/pg-data-backup.tar.gz /data
+docker compose exec web pytest tests/unit/test_services.py
 ```
 
-## Environment Variables Reference
+### Accessing the Database
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `COMPOSE_PROJECT_NAME` | devapp | Prefix for container names |
-| `POSTGRES_HOST` | db | Database hostname |
-| `POSTGRES_DATABASE` | devappdb | Database name |
-| `POSTGRES_USER` | dbappuser | Database user |
-| `POSTGRES_PASSWORD` | p1ssw2rd | Database password |
-| `POSTGRES_PORT` | 5432 | Database port |
-| `FLASK_APP` | app/main.py | Flask entry point |
-| `FLASK_ENV` | development | Flask environment |
-| `FLASK_DEBUG` | 1 | Debug mode |
-| `HTTP_PROXY` | - | HTTP proxy URL |
-| `HTTPS_PROXY` | - | HTTPS proxy URL |
-| `NO_PROXY` | - | Proxy exclusions |
+Connect to PostgreSQL:
+```bash
+docker compose exec db psql -U dbappuser -d devappdb
+```
 
-## Troubleshooting
+### Viewing Logs
 
-### Common Issues
+Application logs:
+```bash
+docker compose logs -f web
+```
 
-**1. Database connection fails**
-- Check if database is healthy: `docker-compose ps`
-- Verify environment variables in `.env`
-- Check logs: `docker logs devapp-db`
+Database logs:
+```bash
+docker compose logs -f db
+```
 
-**2. Module not found errors**
-- Rebuild containers: `docker-compose build --no-cache`
-- Verify `requirements.txt` is correct
+### Development Workflow
 
-**3. Port conflicts**
-- Check if port 5432 or 5000 is already in use
-- Modify ports in `docker-compose/devapp_base.yml`
+1. Make code changes in your editor
+2. Application auto-reloads (Gunicorn with `--reload` flag)
+3. Run tests to verify changes
+4. Create migration if models changed
+5. Commit changes to Git
 
-**4. Traefik routing issues**
-- Verify Traefik network exists: `docker network ls`
-- Check Traefik configuration
-- Verify labels in docker-compose file
+## 📡 API Documentation
 
-## Future Enhancements
+### Health Endpoints
 
-- [ ] Add database migrations (Alembic/Flask-Migrate)
-- [ ] Implement proper ORM (SQLAlchemy)
-- [ ] Add API documentation (Swagger/OpenAPI)
-- [ ] Implement logging aggregation
-- [ ] Add application metrics (Prometheus)
-- [ ] Create automated tests
-- [ ] Add CI/CD pipeline
-- [ ] Implement database seeding
-- [ ] Add environment-specific configs (dev/staging/prod)
+#### Liveness Probe
+```http
+GET /health/live
+```
+Returns 200 if application is running.
+
+#### Readiness Probe
+```http
+GET /health/ready
+```
+Returns 200 if application is ready to serve traffic (DB connected).
+
+#### Application Info
+```http
+GET /health/info
+```
+Returns application metadata (version, environment, etc.).
+
+### API v1 Endpoints
+
+All API endpoints are prefixed with `/api/v1`.
+
+#### List Users
+```http
+GET /api/v1/users?page=1&per_page=20
+```
+
+#### Get User
+```http
+GET /api/v1/users/{id}
+```
+
+#### Create User
+```http
+POST /api/v1/users
+Content-Type: application/json
+
+{
+  "username": "johndoe",
+  "email": "john@example.com"
+}
+```
+
+#### Update User
+```http
+PUT /api/v1/users/{id}
+Content-Type: application/json
+
+{
+  "email": "newemail@example.com"
+}
+```
+
+#### Delete User
+```http
+DELETE /api/v1/users/{id}
+```
+
+### Response Format
+
+Success response:
+```json
+{
+  "status": "success",
+  "data": { ... },
+  "message": "Optional message"
+}
+```
+
+Error response:
+```json
+{
+  "status": "error",
+  "message": "Error description",
+  "errors": { ... }
+}
+```
+
+## 🔒 Security
+
+### Implemented Security Features
+
+- **CORS Configuration**: Controlled cross-origin access
+- **Security Headers**: 
+  - X-Frame-Options (clickjacking protection)
+  - X-Content-Type-Options (MIME sniffing protection)
+  - X-XSS-Protection (XSS filter)
+  - Strict-Transport-Security (HTTPS enforcement)
+  - Content-Security-Policy (resource loading control)
+- **Request ID Tracking**: Unique IDs for request tracing
+- **Structured Logging**: JSON logs for security auditing
+- **Input Validation**: Marshmallow schema validation
+- **SQL Injection Protection**: SQLAlchemy ORM
+- **Environment Variables**: Sensitive data not in code
+
+### Production Security Checklist
+
+- [ ] Change `SECRET_KEY` to a strong random value
+- [ ] Use strong database passwords
+- [ ] Enable HTTPS/TLS (handled by Traefik)
+- [ ] Configure CORS for specific origins only
+- [ ] Review and update CSP headers
+- [ ] Implement authentication/authorization
+- [ ] Enable rate limiting
+- [ ] Set up monitoring and alerting
+- [ ] Regular security updates
+- [ ] Database backups
+
+## 🏢 Corporate Environment Features
+
+### Proxy Support
+
+Application supports corporate proxy environments. Configure in `.env`:
+```env
+HTTP_PROXY=http://proxy.company.com:3128
+HTTPS_PROXY=http://proxy.company.com:3128
+NO_PROXY=localhost,127.0.0.1,.company.com
+```
+
+### Logging
+
+Structured JSON logging for integration with centralized logging systems (ELK, Splunk, etc.):
+```json
+{
+  "asctime": "2026-03-03T10:30:45.123Z",
+  "name": "app",
+  "levelname": "INFO",
+  "message": "Request completed",
+  "method": "GET",
+  "path": "/api/v1/users",
+  "status_code": 200,
+  "duration_ms": 45.23,
+  "request_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+### Monitoring
+
+Health check endpoints compatible with:
+- Kubernetes/OpenShift liveness and readiness probes
+- Docker HEALTHCHECK
+- Load balancer health checks
+- Monitoring systems (Prometheus, Nagios, etc.)
+
+## 📦 Dependencies
+
+### Core Dependencies
+
+- **Flask 3.0.0**: Web framework
+- **SQLAlchemy**: ORM and database toolkit
+- **PostgreSQL**: Production database
+- **Gunicorn**: WSGI HTTP server
+- **Flask-Migrate**: Database migration tool
+- **Flask-CORS**: CORS support
+- **Marshmallow**: Data validation and serialization
+- **python-json-logger**: Structured logging
+
+See [requirements.txt](requirements.txt) for complete list.
+
+## 🐛 Troubleshooting
+
+### Container won't start
+
+Check logs:
+```bash
+docker compose logs web
+```
+
+Verify environment variables:
+```bash
+docker compose config
+```
+
+### Database connection issues
+
+Check database is healthy:
+```bash
+docker compose ps
+docker compose logs db
+```
+
+Test connection:
+```bash
+docker compose exec web python -c "from app import create_app; from app.extensions import db; app = create_app(); app.app_context().push(); db.session.execute('SELECT 1')"
+```
+
+### Import errors in VS Code
+
+Import errors are cosmetic - packages are installed in container, not on host. To fix:
+1. Install Python packages locally, OR
+2. Use VS Code Remote - Containers extension
+
+### Application not accessible
+
+1. Check Traefik proxy is running
+2. Verify DNS/hosts file configuration
+3. Check firewall rules
+4. Review Traefik labels in docker-compose.yml
+
+## 🔄 Deployment
+
+### Production Considerations
+
+1. **Environment Variables**:
+   - Set `FLASK_ENV=production`
+   - Set `FLASK_DEBUG=0`
+   - Use strong `SECRET_KEY`
+   - Secure database credentials
+
+2. **Database**:
+   - Use managed PostgreSQL service or dedicated server
+   - Configure regular backups
+   - Set up replication for high availability
+
+3. **Application Server**:
+   - Increase Gunicorn workers: `--workers 4`
+   - Remove `--reload` flag
+   - Set appropriate timeouts
+
+4. **Monitoring**:
+   - Set up application monitoring (New Relic, Datadog, etc.)
+   - Configure log aggregation
+   - Set up alerting
+
+5. **Security**:
+   - Review all security headers
+   - Enable HTTPS only
+   - Implement authentication
+   - Set up WAF if available
+
+## 📝 Git Workflow
+
+Current branch:
+```bash
+git branch
+```
+
+Commit changes:
+```bash
+git add .
+git commit -m "Description of changes"
+git push origin main
+```
+
+## 🤝 Contributing
+
+1. Create a feature branch
+2. Make your changes
+3. Write/update tests
+4. Run test suite
+5. Create pull request
+
+## 📄 License
+
+[Add your license information here]
+
+## 📧 Support
+
+For issues or questions, contact: [Add your contact information]
 
 ---
 
-**Last Updated**: October 13, 2025  
-**Version**: 1.0  
-**Maintainer**: Development Team
+**Last Updated**: March 3, 2026
+**Version**: 1.0.0
